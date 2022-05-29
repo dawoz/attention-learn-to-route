@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from torch import nn
 import math
+from transformers import BertModel, BertConfig
 
 
 class SkipConnection(nn.Module):
@@ -208,6 +209,50 @@ class GraphAttentionEncoder(nn.Module):
         h = self.init_embed(x.view(-1, x.size(-1))).view(*x.size()[:2], -1) if self.init_embed is not None else x
 
         h = self.layers(h)
+
+        return (
+            h,  # (batch_size, graph_size, embed_dim)
+            h.mean(dim=1),  # average to get embedding of graph, (batch_size, embed_dim)
+        )
+
+
+class GraphBertEncoder(GraphAttentionEncoder):
+    def __init__(
+            self,
+            n_heads,
+            embed_dim,
+            n_layers,
+            node_dim=None,
+            normalization='batch',
+            feed_forward_hidden=512
+    ):
+        super().__init__(
+            n_heads,
+            embed_dim,
+            n_layers,
+            node_dim,
+            normalization,
+            feed_forward_hidden
+        )
+
+        self.layers = BertModel(
+            config=BertConfig(
+                num_attention_heads=n_heads,
+                hidden_size=embed_dim,
+                intermediate_size=feed_forward_hidden,
+                num_hidden_layers=n_layers
+            )
+        )
+
+        # print('###################', sum(p.numel() for p in self.layers.parameters() if p.requires_grad))
+
+    def forward(self, x, mask=None):
+        assert mask is None, "TODO mask not yet supported!"
+
+        # Batch multiply to get initial embeddings of nodes
+        h = self.init_embed(x.view(-1, x.size(-1))).view(*x.size()[:2], -1) if self.init_embed is not None else x
+
+        h = self.layers(inputs_embeds=h)['last_hidden_state']
 
         return (
             h,  # (batch_size, graph_size, embed_dim)

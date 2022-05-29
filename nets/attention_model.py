@@ -5,7 +5,7 @@ import math
 from typing import NamedTuple
 from utils.tensor_functions import compute_in_batches
 
-from nets.graph_encoder import GraphAttentionEncoder
+from nets.graph_encoder import GraphAttentionEncoder, GraphBertEncoder
 from torch.nn import DataParallel
 from utils.beam_search import CachedLookup
 from utils.functions import sample_many
@@ -511,3 +511,40 @@ class AttentionModel(nn.Module):
             .expand(v.size(0), v.size(1) if num_steps is None else num_steps, v.size(2), self.n_heads, -1)
             .permute(3, 0, 1, 2, 4)  # (n_heads, batch_size, num_steps, graph_size, head_dim)
         )
+
+
+class AttentionBertModel(AttentionModel):
+
+    def __init__(self,
+                 embedding_dim,
+                 hidden_dim,
+                 problem,
+                 n_encode_layers=2,
+                 tanh_clipping=10.,
+                 mask_inner=True,
+                 mask_logits=True,
+                 normalization='batch',
+                 n_heads=8,
+                 checkpoint_encoder=False,
+                 shrink_size=None):
+        super(AttentionBertModel, self).__init__(
+            embedding_dim,
+            hidden_dim,
+            problem,
+            n_encode_layers,
+            tanh_clipping,
+            mask_inner,
+            mask_logits,
+            normalization,
+            n_heads,
+            checkpoint_encoder,
+            shrink_size
+        )
+
+        self.embedder = GraphBertEncoder(
+            n_heads=n_heads,
+            embed_dim=embedding_dim,
+            n_layers=self.n_encode_layers,
+            normalization=normalization
+        )
+
