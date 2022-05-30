@@ -12,7 +12,7 @@ from nets.critic_network import CriticNetwork
 from options import get_options
 from train import train_epoch, validate, get_inner_model
 from reinforce_baselines import NoBaseline, ExponentialBaseline, CriticBaseline, RolloutBaseline, WarmupBaseline
-from nets.attention_model import AttentionModel, AttentionBertModel
+from nets.attention_model import AttentionModel, attention_model_from_name
 from nets.pointer_network import PointerNetwork, CriticNetworkLSTM
 from utils import torch_load_cpu, load_problem
 
@@ -53,7 +53,8 @@ def run(opts):
     model_class = {
         'attention': AttentionModel,
         'pointer': PointerNetwork,
-        'attention_bert': AttentionBertModel
+        'attention_bert': attention_model_from_name('bert'),
+        'attention_bigbird': attention_model_from_name('bigbird')
     }.get(opts.model, None)
     assert model_class is not None, "Unknown model: {}".format(model_class)
     model = model_class(

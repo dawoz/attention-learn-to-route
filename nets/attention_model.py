@@ -5,7 +5,7 @@ import math
 from typing import NamedTuple
 from utils.tensor_functions import compute_in_batches
 
-from nets.graph_encoder import GraphAttentionEncoder, GraphBertEncoder
+from nets.graph_encoder import GraphAttentionEncoder, GraphAttentionEncoderCustom
 from torch.nn import DataParallel
 from utils.beam_search import CachedLookup
 from utils.functions import sample_many
@@ -513,12 +513,14 @@ class AttentionModel(nn.Module):
         )
 
 
-class AttentionBertModel(AttentionModel):
+class AttentionModelCustom(AttentionModel):
 
     def __init__(self,
                  embedding_dim,
                  hidden_dim,
                  problem,
+                 config_class,
+                 model_class,
                  n_encode_layers=2,
                  tanh_clipping=10.,
                  mask_inner=True,
@@ -527,7 +529,7 @@ class AttentionBertModel(AttentionModel):
                  n_heads=8,
                  checkpoint_encoder=False,
                  shrink_size=None):
-        super(AttentionBertModel, self).__init__(
+        super(AttentionModelCustom, self).__init__(
             embedding_dim,
             hidden_dim,
             problem,
@@ -541,10 +543,25 @@ class AttentionBertModel(AttentionModel):
             shrink_size
         )
 
-        self.embedder = GraphBertEncoder(
+        self.embedder = GraphAttentionEncoderCustom(
             n_heads=n_heads,
             embed_dim=embedding_dim,
             n_layers=self.n_encode_layers,
-            normalization=normalization
+            normalization=normalization,
+            model_class=model_class,
+            config_class=config_class
         )
+
+
+def attention_model_from_name(model_name):
+    import transformers as tr
+    config_class, model_class = {
+        'bert': (tr.BertConfig, tr.BertModel),
+        'bigbird': (tr.BigBirdConfig, tr.BigBirdModel)
+    }.get(model_name, None)
+    assert model_class is not None, "Unknown model: {}".format(model_class)
+
+    def wrapper(*args, **kwargs):
+        return AttentionModelCustom(*args, config_class=config_class, model_class=model_class, **kwargs)
+    return wrapper
 

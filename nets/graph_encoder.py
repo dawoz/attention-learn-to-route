@@ -2,7 +2,6 @@ import torch
 import numpy as np
 from torch import nn
 import math
-from transformers import BertModel, BertConfig
 
 
 class SkipConnection(nn.Module):
@@ -216,12 +215,14 @@ class GraphAttentionEncoder(nn.Module):
         )
 
 
-class GraphBertEncoder(GraphAttentionEncoder):
+class GraphAttentionEncoderCustom(GraphAttentionEncoder):
     def __init__(
             self,
             n_heads,
             embed_dim,
             n_layers,
+            config_class,
+            model_class,
             node_dim=None,
             normalization='batch',
             feed_forward_hidden=512
@@ -235,8 +236,8 @@ class GraphBertEncoder(GraphAttentionEncoder):
             feed_forward_hidden
         )
 
-        self.layers = BertModel(
-            config=BertConfig(
+        self.layers = model_class(
+            config=config_class(
                 num_attention_heads=n_heads,
                 hidden_size=embed_dim,
                 intermediate_size=feed_forward_hidden,
