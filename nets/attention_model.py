@@ -91,7 +91,7 @@ class AttentionModel(nn.Module):
             if self.is_vrp and self.allow_partial:  # Need to include the demand if split delivery allowed
                 self.project_node_step = nn.Linear(1, 3 * embedding_dim, bias=False)
         else:  # TSP
-            assert problem.NAME == "tsp", "Unsupported problem: {}".format(problem.NAME)
+            assert problem.NAME == "tsp" or problem.NAME == "tsp_dist", "Unsupported problem: {}".format(problem.NAME)
             step_context_dim = 2 * embedding_dim  # Embedding of first and last node
             node_dim = 2  # x, y
             
@@ -528,7 +528,8 @@ class AttentionModelCustom(AttentionModel):
                  normalization='batch',
                  n_heads=8,
                  checkpoint_encoder=False,
-                 shrink_size=None):
+                 shrink_size=None,
+                 num_dist=0):
         super(AttentionModelCustom, self).__init__(
             embedding_dim,
             hidden_dim,
@@ -543,6 +544,8 @@ class AttentionModelCustom(AttentionModel):
             shrink_size
         )
 
+        self.num_dist = num_dist
+        self.init_embed = nn.Linear(2+num_dist, embedding_dim)
         self.embedder = GraphAttentionEncoderCustom(
             n_heads=n_heads,
             embed_dim=embedding_dim,
@@ -552,8 +555,33 @@ class AttentionModelCustom(AttentionModel):
             config_class=config_class
         )
 
+    def forward(self, input, return_pi=False):
+        """
+        :param input: (batch_size, graph_size, node_dim) input node features or dictionary with multiple tensors
+        :param return_pi: whether to return the output sequences, this is optional as it is not compatible with
+        using DataParallel as the results may be of different lengths on different GPUs
+        :return:
+        """
 
-def attention_model_from_name(model_name):
+        input = input[:, :, :self.num_dist+2]
+
+        if self.checkpoint_encoder and self.training:  # Only checkpoint if we need gradients
+            embeddings, _ = checkpoint(self.embedder, self._init_embed(input))
+        else:
+            embeddings, _ = self.embedder(self._init_embed(input))
+
+        _log_p, pi = self._inner(input, embeddings)
+
+        cost, mask = self.problem.get_costs(input, pi)
+        # Log likelyhood is calculated within the model since returning it per action does not work well with
+        # DataParallel since sequences can be of different lengths
+        ll = self._calc_log_likelihood(_log_p, pi, mask)
+        if return_pi:
+            return cost, ll, pi
+
+        return cost, ll
+
+def attention_model_from_name(model_name, num_dist=0):
     import transformers as tr
     config_class, model_class = {
         'bert': (tr.BertConfig, tr.BertModel),
@@ -562,6 +590,6 @@ def attention_model_from_name(model_name):
     assert model_class is not None, "Unknown model: {}".format(model_class)
 
     def wrapper(*args, **kwargs):
-        return AttentionModelCustom(*args, config_class=config_class, model_class=model_class, **kwargs)
+        return AttentionModelCustom(*args, config_class=config_class, model_class=model_class, num_dist=num_dist, **kwargs)
     return wrapper
 

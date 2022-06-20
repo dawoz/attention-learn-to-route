@@ -39,7 +39,7 @@ def run(opts):
     opts.device = torch.device("cuda:0" if opts.use_cuda else "cpu")
 
     # Figure out what's the problem
-    problem = load_problem(opts.problem)
+    problem = load_problem(opts.problem if 'tsp' not in opts.problem else ('tsp' if opts.num_dist == 0 else 'tsp_dist'))
 
     # Load data from load_path
     load_data = {}
@@ -53,8 +53,8 @@ def run(opts):
     model_class = {
         'attention': AttentionModel,
         'pointer': PointerNetwork,
-        'attention_bert': attention_model_from_name('bert'),
-        'attention_bigbird': attention_model_from_name('bigbird')
+        'attention_bert': attention_model_from_name('bert', opts.num_dist),
+        'attention_bigbird': attention_model_from_name('bigbird', opts.num_dist)
     }.get(opts.model, None)
     assert model_class is not None, "Unknown model: {}".format(model_class)
     model = model_class(
