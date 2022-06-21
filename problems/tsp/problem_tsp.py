@@ -5,6 +5,7 @@ import pickle
 from problems.tsp.state_tsp import StateTSP
 from utils.beam_search import beam_search
 import torch.nn.functional as F
+import multiprocessing
 
 
 class TSP(object):
@@ -101,8 +102,11 @@ class TSPDist(TSP):
         return TSPDistDataset(*args, **kwargs)
 
 
+def get_dist(d):
+    return torch.norm((d[:, None] - d).cuda(), dim=2, p=2).sort(dim=1)[0]
+
+
 class TSPDistDataset(Dataset):
-    
     def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
         super(TSPDistDataset, self).__init__()
 
@@ -117,7 +121,8 @@ class TSPDistDataset(Dataset):
             # Sample points randomly in [0, 1] square
             self.data = [torch.FloatTensor(size, 2).uniform_(0, 1) for i in range(num_samples)]
         
-        self.distances = [torch.norm(d[:, None] - d, dim=2, p=2).sort(dim=1)[0] for d in self.data]
+        pool = multiprocessing.Pool(processes=20)
+        self.distances = list(*pool.map(get_dist, self.data))
 
         self.size = len(self.data)
 
