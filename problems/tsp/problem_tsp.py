@@ -101,6 +101,15 @@ class TSPDist(TSP):
         return TSPDistDataset(*args, **kwargs)
 
 
+def pdist(x):
+    xx = F.pdist(x)
+    m = torch.zeros((x.shape[0],x.shape[0]))
+    triu_indices = torch.triu_indices(row=x.shape[0], col=x.shape[0], offset=1)
+    m[triu_indices[0], triu_indices[1]] = xx
+    m[triu_indices[1], triu_indices[0]] = xx
+    return m
+
+
 class TSPDistDataset(Dataset):
     def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
         super(TSPDistDataset, self).__init__()
@@ -116,7 +125,7 @@ class TSPDistDataset(Dataset):
             # Sample points randomly in [0, 1] square
             self.data = [torch.FloatTensor(size, 2).uniform_(0, 1) for i in range(num_samples)]
         
-        self.distances = [torch.norm((d[:, None] - d).cuda(), dim=2, p=2) for d in self.data]
+        self.distances = [pdist(d) for d in self.data]
 
         self.size = len(self.data)
 
