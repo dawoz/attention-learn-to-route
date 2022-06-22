@@ -545,7 +545,7 @@ class AttentionModelCustom(AttentionModel):
         )
 
         self.num_dist = num_dist
-        self.init_embed = nn.Linear(2+num_dist, embedding_dim)
+        self.init_embed = nn.Linear(num_dist if num_dist > 0 else 2, embedding_dim)
         self.embedder = GraphAttentionEncoderCustom(
             n_heads=n_heads,
             embed_dim=embedding_dim,
@@ -562,9 +562,6 @@ class AttentionModelCustom(AttentionModel):
         using DataParallel as the results may be of different lengths on different GPUs
         :return:
         """
-
-        input = input[:, :, :self.num_dist+2]
-
         if self.checkpoint_encoder and self.training:  # Only checkpoint if we need gradients
             embeddings, _ = checkpoint(self.embedder, self._init_embed(input))
         else:

@@ -2,7 +2,7 @@ from torch.utils.data import Dataset
 import torch
 import os
 import pickle
-from problems.tsp.state_tsp import StateTSP
+from problems.tsp.state_tsp import StateTSP, StateTSPDist
 from utils.beam_search import beam_search
 import torch.nn.functional as F
 
@@ -78,7 +78,7 @@ class TSPDataset(Dataset):
         return self.data[idx]
 
 
-class TSPDist(TSP):
+class TSPDist_(TSP):
 
     NAME = 'tsp_dist'
 
@@ -98,7 +98,7 @@ class TSPDist(TSP):
 
     @staticmethod
     def make_dataset(*args, **kwargs):
-        return TSPDistDataset(*args, **kwargs)
+        return TSPDist_Dataset(*args, **kwargs)
 
 
 def pdist(x):
@@ -110,9 +110,9 @@ def pdist(x):
     return m
 
 
-class TSPDistDataset(Dataset):
+class TSPDist_Dataset(Dataset):
     def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
-        super(TSPDistDataset, self).__init__()
+        super(TSPDist_Dataset, self).__init__()
 
         self.data_set = []
         if filename is not None:
@@ -134,3 +134,58 @@ class TSPDistDataset(Dataset):
 
     def __getitem__(self, idx):
         return torch.cat([self.data[idx],self.distances[idx]],dim=1)
+
+
+
+class TSPDist(TSP):
+
+    NAME = 'tsp_dist'
+
+    @staticmethod
+    def get_costs(dataset, pi):
+        # pi: matrix (batch_size, graph_size)
+
+        # Check that tours are valid, i.e. contain 0 to n -1
+        assert (
+            torch.arange(pi.size(1), out=pi.data.new()).view(1, -1).expand_as(pi) ==
+            pi.data.sort(1)[0]
+        ).all(), "Invalid tour"
+
+        a = torch.arange(pi.shape[1])
+        idx = torch.stack((a, a.roll(-1,0)))  # neighbor cities
+        return dataset[:,idx[0],idx[1]].sum(1), None
+
+    @staticmethod
+    def make_state(*args, **kwargs):
+        return StateTSPDist.initialize(*args, **kwargs)
+
+    @staticmethod
+    def make_dataset(*args, **kwargs):
+        return TSPDistDataset(*args, **kwargs)
+
+
+class TSPDistDataset(Dataset):
+    def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
+        super(TSPDistDataset, self).__init__()
+
+        self.data_set = []
+        if filename is not None:
+            assert os.path.splitext(filename)[1] == '.pkl'
+
+            with open(filename, 'rb') as f:
+                data = pickle.load(f)
+                self.data = [torch.FloatTensor(row) for row in (data[offset:offset+num_samples])]
+        else:
+            # Sample distances in [0, 1]
+            self.data = []
+            for i in range(num_samples):
+                r = torch.FloatTensor(size, size).uniform_(0, 1).triu(1)
+                self.data.append((r + r.t()))
+
+        self.size = len(self.data)
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, idx):
+        return self.data[idx]
