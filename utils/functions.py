@@ -11,10 +11,11 @@ import torch.nn.functional as F
 
 
 def load_problem(name):
-    from problems import TSP, CVRP, SDVRP, OP, PCTSPDet, PCTSPStoch, TSPDist
+    from problems import TSP, CVRP, SDVRP, OP, PCTSPDet, PCTSPStoch, TSPDist, TSPCoordDist
     problem = {
         'tsp': TSP,
         'tsp_dist': TSPDist,
+        'tsp_coorddist': TSPCoordDist,
         'cvrp': CVRP,
         'sdvrp': SDVRP,
         'op': OP,

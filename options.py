@@ -74,6 +74,7 @@ def get_options(args=None):
 
     opts = parser.parse_args(args)
 
+    opts.num_dist = opts.num_dist if opts.num_dist > 0 else opts.graph_size
     opts.use_cuda = torch.cuda.is_available() and not opts.no_cuda
     opts.run_name = "{}_{}".format(opts.run_name, time.strftime("%Y%m%dT%H%M%S"))
     opts.save_dir = os.path.join(

@@ -18,10 +18,6 @@ from utils import torch_load_cpu, load_problem
 
 
 def run(opts):
-
-    # if num_dist > 0 set tsp_dist
-    opts.problem = opts.problem if 'tsp' not in opts.problem else ('tsp' if opts.num_dist == 0 else 'tsp_dist')
-
     # Pretty print the run args
     pp.pprint(vars(opts))
 

@@ -91,7 +91,7 @@ class AttentionModel(nn.Module):
             if self.is_vrp and self.allow_partial:  # Need to include the demand if split delivery allowed
                 self.project_node_step = nn.Linear(1, 3 * embedding_dim, bias=False)
         else:  # TSP
-            assert problem.NAME == "tsp" or problem.NAME == "tsp_dist", "Unsupported problem: {}".format(problem.NAME)
+            assert problem.NAME in ("tsp", "tsp_dist", "tsp_coorddist"), "Unsupported problem: {}".format(problem.NAME)
             step_context_dim = 2 * embedding_dim  # Embedding of first and last node
             node_dim = 2  # x, y
             
@@ -545,7 +545,15 @@ class AttentionModelCustom(AttentionModel):
         )
 
         self.num_dist = num_dist
-        self.init_embed = nn.Linear(num_dist if num_dist > 0 else 2, embedding_dim)
+
+        self.node_dim = {
+            'tsp': 2,
+            'tsp_coorddist': 2 + num_dist,
+            'tsp_dist': num_dist
+        }.get(problem.NAME,None)
+        assert self.node_dim, "Unsupported problem: " + problem.NAME
+
+        self.init_embed = nn.Linear(self.node_dim, embedding_dim)
         self.embedder = GraphAttentionEncoderCustom(
             n_heads=n_heads,
             embed_dim=embedding_dim,
@@ -562,6 +570,9 @@ class AttentionModelCustom(AttentionModel):
         using DataParallel as the results may be of different lengths on different GPUs
         :return:
         """
+
+        input = input[:,:,:self.node_dim] # (batch_size, graph_size, node_dim)
+
         if self.checkpoint_encoder and self.training:  # Only checkpoint if we need gradients
             embeddings, _ = checkpoint(self.embedder, self._init_embed(input))
         else:

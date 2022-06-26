@@ -78,9 +78,9 @@ class TSPDataset(Dataset):
         return self.data[idx]
 
 
-class TSPDist_(TSP):
+class TSPCoordDist(TSP):
 
-    NAME = 'tsp_dist'
+    NAME = 'tsp_coorddist'
 
     @staticmethod
     def get_costs(dataset, pi):
@@ -98,21 +98,27 @@ class TSPDist_(TSP):
 
     @staticmethod
     def make_dataset(*args, **kwargs):
-        return TSPDist_Dataset(*args, **kwargs)
+        return TSPCoordDistDataset(*args, **kwargs)
+
+    @staticmethod
+    def make_state(*args, **kwargs):
+        kwargs['dist'] = args[0][:,:,2:] # (batch_size, graph_size, num_dist)
+        return StateTSP.initialize(args[0][:,:,:2], # (batch_size, graph_size, 2)
+                                   *args[1:], **kwargs)
 
 
-def pdist(x):
-    xx = F.pdist(x)
-    m = torch.zeros((x.shape[0],x.shape[0]))
-    triu_indices = torch.triu_indices(row=x.shape[0], col=x.shape[0], offset=1)
-    m[triu_indices[0], triu_indices[1]] = xx
-    m[triu_indices[1], triu_indices[0]] = xx
-    return m
+# def pdist(x):
+#     xx = F.pdist(x)
+#     m = torch.zeros((x.shape[0],x.shape[0]))
+#     triu_indices = torch.triu_indices(row=x.shape[0], col=x.shape[0], offset=1)
+#     m[triu_indices[0], triu_indices[1]] = xx
+#     m[triu_indices[1], triu_indices[0]] = xx
+#     return m
 
 
-class TSPDist_Dataset(Dataset):
+class TSPCoordDistDataset(Dataset):
     def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
-        super(TSPDist_Dataset, self).__init__()
+        super(TSPCoordDistDataset, self).__init__()
 
         self.data_set = []
         if filename is not None:
@@ -123,9 +129,10 @@ class TSPDist_Dataset(Dataset):
                 self.data = [torch.FloatTensor(row) for row in (data[offset:offset+num_samples])]
         else:
             # Sample points randomly in [0, 1] square
-            self.data = [torch.FloatTensor(size, 2).uniform_(0, 1) for i in range(num_samples)]
+            self.data = torch.stack([torch.FloatTensor(size, 2).uniform_(0, 1) for i in range(num_samples)])
         
-        self.distances = [pdist(d) for d in self.data]
+        #self.distances = [pdist(d) for d in self.data]
+        self.distances = (self.data[:, :, None, :] - self.data[:, None, :, :]).norm(p=2, dim=-1)
 
         self.size = len(self.data)
 
@@ -167,6 +174,7 @@ class TSPDist(TSP):
 class TSPDistDataset(Dataset):
     def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
         super(TSPDistDataset, self).__init__()
+        raise NotImplementedError
 
         self.data_set = []
         if filename is not None:

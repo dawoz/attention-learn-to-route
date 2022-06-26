@@ -39,13 +39,15 @@ class StateTSP(NamedTuple):
         )
 
     @staticmethod
-    def initialize(loc, visited_dtype=torch.uint8):
+    def initialize(loc, visited_dtype=torch.uint8, **kwargs):
 
+        # assert loc.shape[-1] == 2, "loc must be (x,y)"
+        # assert (kwargs['dist'] - (loc[:, :, None, :] - loc[:, None, :, :]).norm(p=2, dim=-1)).norm().item() == 0
         batch_size, n_loc, _ = loc.size()
         prev_a = torch.zeros(batch_size, 1, dtype=torch.long, device=loc.device)
         return StateTSP(
             loc=loc,
-            dist=(loc[:, :, None, :] - loc[:, None, :, :]).norm(p=2, dim=-1),
+            dist=kwargs.get('dist',(loc[:, :, None, :] - loc[:, None, :, :]).norm(p=2, dim=-1)),
             ids=torch.arange(batch_size, dtype=torch.int64, device=loc.device)[:, None],  # Add steps dimension
             first_a=prev_a,
             prev_a=prev_a,
