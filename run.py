@@ -52,7 +52,10 @@ def run(opts):
     model_class = {
         'attention': AttentionModel,
         'pointer': PointerNetwork
-    }.get(opts.model, attention_model_from_name(opts.model))
+    }.get(opts.model, None)
+    if not model_class:
+        model_class = attention_model_from_name(opts.model)
+    assert model_class is not None, "Unknown model: {}".format(model_class)
     model = model_class(
         opts.embedding_dim,
         opts.hidden_dim,
@@ -63,7 +66,10 @@ def run(opts):
         normalization=opts.normalization,
         tanh_clipping=opts.tanh_clipping,
         checkpoint_encoder=opts.checkpoint_encoder,
-        shrink_size=opts.shrink_size
+        shrink_size=opts.shrink_size,
+        num_dist=opts.num_dist,
+        no_coord=opts.no_coord,
+        sort_dist=opts.sort_dist
     ).to(opts.device)
 
     if opts.use_cuda and torch.cuda.device_count() > 1:

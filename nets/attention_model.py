@@ -52,7 +52,10 @@ class AttentionModel(nn.Module):
                  normalization='batch',
                  n_heads=8,
                  checkpoint_encoder=False,
-                 shrink_size=None):
+                 shrink_size=None,
+                 num_dist=0,
+                 no_coord=False,
+                 sort_dist=False):
         super(AttentionModel, self).__init__()
 
         self.embedding_dim = embedding_dim
@@ -99,7 +102,11 @@ class AttentionModel(nn.Module):
             self.W_placeholder = nn.Parameter(torch.Tensor(2 * embedding_dim))
             self.W_placeholder.data.uniform_(-1, 1)  # Placeholder should be in range of activations
 
-        self.init_embed = nn.Linear(node_dim, embedding_dim)
+        self.num_dist = num_dist
+        self.sort_dist = sort_dist
+        self.no_coord = no_coord
+        self.node_dim = (0 if no_coord else 2) + num_dist
+        self.init_embed = nn.Linear(self.node_dim, embedding_dim)
 
         self.embedder = GraphAttentionEncoder(
             n_heads=n_heads,
@@ -128,6 +135,14 @@ class AttentionModel(nn.Module):
         using DataParallel as the results may be of different lengths on different GPUs
         :return:
         """
+
+        # add distance features
+        if self.num_dist > 0:
+            idx = 0 if self.no_coord else 2
+            if self.sort_dist:
+                input = torch.cat((input[:, :, :idx], (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1).sort(-1)[0]),dim=-1)
+            else:
+                input = torch.cat((input[:, :, :idx], (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1)),dim=-1)
 
         if self.checkpoint_encoder and self.training:  # Only checkpoint if we need gradients
             embeddings, _ = checkpoint(self.embedder, self._init_embed(input))
@@ -531,7 +546,7 @@ class AttentionModelCustom(AttentionModel):
                  shrink_size=None,
                  num_dist=0,
                  no_coord=False,
-                 sort_dim=False):
+                 sort_dist=False):
         super(AttentionModelCustom, self).__init__(
             embedding_dim,
             hidden_dim,
@@ -543,11 +558,14 @@ class AttentionModelCustom(AttentionModel):
             normalization,
             n_heads,
             checkpoint_encoder,
-            shrink_size
+            shrink_size,
+            num_dist,
+            no_coord,
+            sort_dist
         )
 
         self.num_dist = num_dist
-        self.sort_dim = sort_dim
+        self.sort_dist = sort_dist
         self.no_coord = no_coord
         self.node_dim = (0 if no_coord else 2) + num_dist
         self.init_embed = nn.Linear(self.node_dim, embedding_dim)
@@ -560,37 +578,7 @@ class AttentionModelCustom(AttentionModel):
             config_class=config_class
         )
 
-    def forward(self, input, return_pi=False):
-        """
-        :param input: (batch_size, graph_size, node_dim) input node features or dictionary with multiple tensors
-        :param return_pi: whether to return the output sequences, this is optional as it is not compatible with
-        using DataParallel as the results may be of different lengths on different GPUs
-        :return:
-        """
 
-        # add distance features
-        if self.num_dist > 0:
-            idx = 0 if self.no_coord else 2
-            if self.sort_dim:
-                input = torch.cat((input[:, :, :idx], (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1).sort(-1)[0]),dim=-1)
-            else:
-                input = torch.cat((input[:, :, :idx], (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1)),dim=-1)
-
-        if self.checkpoint_encoder and self.training:  # Only checkpoint if we need gradients
-            embeddings, _ = checkpoint(self.embedder, self._init_embed(input))
-        else:
-            embeddings, _ = self.embedder(self._init_embed(input))
-
-        _log_p, pi = self._inner(input, embeddings)
-
-        cost, mask = self.problem.get_costs(input, pi)
-        # Log likelyhood is calculated within the model since returning it per action does not work well with
-        # DataParallel since sequences can be of different lengths
-        ll = self._calc_log_likelihood(_log_p, pi, mask)
-        if return_pi:
-            return cost, ll, pi
-
-        return cost, ll
 
 def attention_model_from_name(model_name):
     import transformers as tr
@@ -598,9 +586,8 @@ def attention_model_from_name(model_name):
         'bert': (tr.BertConfig, tr.BertModel),
         'bigbird': (tr.BigBirdConfig, tr.BigBirdModel)
     }.get(model_name, (None,None))
-    assert None not in (config_class, model_class), "Unknown model: {}".format(model_name)
 
     def wrapper(*args, **kwargs):
         return AttentionModelCustom(*args, config_class=config_class, model_class=model_class, **kwargs)
-    return wrapper
+    return wrapper if None not in (config_class, model_class) else None
 
