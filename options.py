@@ -28,6 +28,8 @@ def get_options(args=None):
                              'Set to 0 to not perform any clipping.')
     parser.add_argument('--normalization', default='batch', help="Normalization type, 'batch' (default) or 'instance'")
     parser.add_argument('--num_dist', type=int, default=0, help="Number of nearest neightbors' distances fed into the model (default 0)")
+    parser.add_argument('--no_coord', action='store_true', help="Don't use the coordinates as features (num dist must be > 0)")
+    parser.add_argument('--sort_dist', action='store_true', help="Sort distance features (num dist must be > 0)")
 
     # Training
     parser.add_argument('--lr_model', type=float, default=1e-4, help="Set the learning rate for the actor network")
@@ -74,7 +76,15 @@ def get_options(args=None):
 
     opts = parser.parse_args(args)
 
-    opts.num_dist = opts.num_dist if opts.num_dist > 0 else opts.graph_size
+    if opts.no_coord and opts.num_dist == 0:
+        raise ValueError('No features! Possible uses:\n' \
+            '\t- only coordinates:\t[x, y]\t--num_dist 0\n'\
+            '\t- coordinates and n distances:\t[x, y, d_0, d_1, ..., d_n],\t--num_dist n, n > 0\n'\
+            '\t- only n distances:\t[d_0, d_1, ..., d_n],\t--num_dist n, n > 0, --no_coord')
+
+    if opts.sort_dist and opts.num_dist == 0:
+        raise ValueError('Can\'t sort distances if num_dist is 0')
+
     opts.use_cuda = torch.cuda.is_available() and not opts.no_cuda
     opts.run_name = "{}_{}".format(opts.run_name, time.strftime("%Y%m%dT%H%M%S"))
     opts.save_dir = os.path.join(

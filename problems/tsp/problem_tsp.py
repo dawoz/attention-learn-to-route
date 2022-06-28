@@ -78,69 +78,69 @@ class TSPDataset(Dataset):
         return self.data[idx]
 
 
-class TSPCoordDist(TSP):
+# class TSPCoordDist(TSP):
 
-    NAME = 'tsp_coorddist'
+#     NAME = 'tsp_coorddist'
 
-    @staticmethod
-    def get_costs(dataset, pi):
-        # Check that tours are valid, i.e. contain 0 to n -1
-        assert (
-            torch.arange(pi.size(1), out=pi.data.new()).view(1, -1).expand_as(pi) ==
-            pi.data.sort(1)[0]
-        ).all(), "Invalid tour"
+#     @staticmethod
+#     def get_costs(dataset, pi):
+#         # Check that tours are valid, i.e. contain 0 to n -1
+#         assert (
+#             torch.arange(pi.size(1), out=pi.data.new()).view(1, -1).expand_as(pi) ==
+#             pi.data.sort(1)[0]
+#         ).all(), "Invalid tour"
 
-        # Gather dataset in order of tour
-        d = dataset[:,:,:2].gather(1, pi.unsqueeze(-1).expand_as(dataset[:,:,:2]))
+#         # Gather dataset in order of tour
+#         d = dataset[:,:,:2].gather(1, pi.unsqueeze(-1).expand_as(dataset[:,:,:2]))
 
-        # Length is distance (L2-norm of difference) from each next location from its prev and of last from first
-        return (d[:, 1:] - d[:, :-1]).norm(p=2, dim=2).sum(1) + (d[:, 0] - d[:, -1]).norm(p=2, dim=1), None
+#         # Length is distance (L2-norm of difference) from each next location from its prev and of last from first
+#         return (d[:, 1:] - d[:, :-1]).norm(p=2, dim=2).sum(1) + (d[:, 0] - d[:, -1]).norm(p=2, dim=1), None
 
-    @staticmethod
-    def make_dataset(*args, **kwargs):
-        return TSPCoordDistDataset(*args, **kwargs)
+#     @staticmethod
+#     def make_dataset(*args, **kwargs):
+#         return TSPCoordDistDataset(*args, **kwargs)
 
-    @staticmethod
-    def make_state(*args, **kwargs):
-        kwargs['dist'] = args[0][:,:,2:] # (batch_size, graph_size, num_dist)
-        return StateTSP.initialize(args[0][:,:,:2], # (batch_size, graph_size, 2)
-                                   *args[1:], **kwargs)
-
-
-# def pdist(x):
-#     xx = F.pdist(x)
-#     m = torch.zeros((x.shape[0],x.shape[0]))
-#     triu_indices = torch.triu_indices(row=x.shape[0], col=x.shape[0], offset=1)
-#     m[triu_indices[0], triu_indices[1]] = xx
-#     m[triu_indices[1], triu_indices[0]] = xx
-#     return m
+#     @staticmethod
+#     def make_state(*args, **kwargs):
+#         kwargs['dist'] = args[0][:,:,2:] # (batch_size, graph_size, num_dist)
+#         return StateTSP.initialize(args[0][:,:,:2], # (batch_size, graph_size, 2)
+#                                    *args[1:], **kwargs)
 
 
-class TSPCoordDistDataset(Dataset):
-    def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
-        super(TSPCoordDistDataset, self).__init__()
+# # def pdist(x):
+# #     xx = F.pdist(x)
+# #     m = torch.zeros((x.shape[0],x.shape[0]))
+# #     triu_indices = torch.triu_indices(row=x.shape[0], col=x.shape[0], offset=1)
+# #     m[triu_indices[0], triu_indices[1]] = xx
+# #     m[triu_indices[1], triu_indices[0]] = xx
+# #     return m
 
-        self.data_set = []
-        if filename is not None:
-            assert os.path.splitext(filename)[1] == '.pkl'
 
-            with open(filename, 'rb') as f:
-                data = pickle.load(f)
-                self.data = [torch.FloatTensor(row) for row in (data[offset:offset+num_samples])]
-        else:
-            # Sample points randomly in [0, 1] square
-            self.data = torch.stack([torch.FloatTensor(size, 2).uniform_(0, 1) for i in range(num_samples)])
+# class TSPCoordDistDataset(Dataset):
+#     def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
+#         super(TSPCoordDistDataset, self).__init__()
+
+#         self.data_set = []
+#         if filename is not None:
+#             assert os.path.splitext(filename)[1] == '.pkl'
+
+#             with open(filename, 'rb') as f:
+#                 data = pickle.load(f)
+#                 self.data = [torch.FloatTensor(row) for row in (data[offset:offset+num_samples])]
+#         else:
+#             # Sample points randomly in [0, 1] square
+#             self.data = torch.stack([torch.FloatTensor(size, 2).uniform_(0, 1) for i in range(num_samples)])
         
-        #self.distances = [pdist(d) for d in self.data]
-        self.distances = (self.data[:, :, None, :] - self.data[:, None, :, :]).norm(p=2, dim=-1)
+#         #self.distances = [pdist(d) for d in self.data]
+#         self.distances = (self.data[:, :, None, :] - self.data[:, None, :, :]).norm(p=2, dim=-1)
 
-        self.size = len(self.data)
+#         self.size = len(self.data)
 
-    def __len__(self):
-        return self.size
+#     def __len__(self):
+#         return self.size
 
-    def __getitem__(self, idx):
-        return torch.cat([self.data[idx],self.distances[idx]],dim=1)
+#     def __getitem__(self, idx):
+#         return torch.cat([self.data[idx],self.distances[idx]],dim=1)
 
 
 

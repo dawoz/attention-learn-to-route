@@ -91,7 +91,7 @@ class AttentionModel(nn.Module):
             if self.is_vrp and self.allow_partial:  # Need to include the demand if split delivery allowed
                 self.project_node_step = nn.Linear(1, 3 * embedding_dim, bias=False)
         else:  # TSP
-            assert problem.NAME in ("tsp", "tsp_dist", "tsp_coorddist"), "Unsupported problem: {}".format(problem.NAME)
+            assert problem.NAME in ("tsp", "tsp_dist"), "Unsupported problem: {}".format(problem.NAME)
             step_context_dim = 2 * embedding_dim  # Embedding of first and last node
             node_dim = 2  # x, y
             
@@ -529,7 +529,9 @@ class AttentionModelCustom(AttentionModel):
                  n_heads=8,
                  checkpoint_encoder=False,
                  shrink_size=None,
-                 num_dist=0):
+                 num_dist=0,
+                 no_coord=False,
+                 sort_dim=False):
         super(AttentionModelCustom, self).__init__(
             embedding_dim,
             hidden_dim,
@@ -545,14 +547,9 @@ class AttentionModelCustom(AttentionModel):
         )
 
         self.num_dist = num_dist
-
-        self.node_dim = {
-            'tsp': 2,
-            'tsp_coorddist': 2 + num_dist,
-            'tsp_dist': num_dist
-        }.get(problem.NAME,None)
-        assert self.node_dim, "Unsupported problem: " + problem.NAME
-
+        self.sort_dim = sort_dim
+        self.no_coord = no_coord
+        self.node_dim = (0 if no_coord else 2) + num_dist
         self.init_embed = nn.Linear(self.node_dim, embedding_dim)
         self.embedder = GraphAttentionEncoderCustom(
             n_heads=n_heads,
@@ -571,7 +568,13 @@ class AttentionModelCustom(AttentionModel):
         :return:
         """
 
-        input = input[:,:,:self.node_dim] # (batch_size, graph_size, node_dim)
+        # add distance features
+        if self.num_dist > 0:
+            idx = 0 if self.no_coord else 2
+            if self.sort_dim:
+                input = torch.cat((input[:, :, :idx], (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1).sort(-1)[0]),dim=-1)
+            else:
+                input = torch.cat((input[:, :, :idx], (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1)),dim=-1)
 
         if self.checkpoint_encoder and self.training:  # Only checkpoint if we need gradients
             embeddings, _ = checkpoint(self.embedder, self._init_embed(input))
@@ -594,8 +597,8 @@ def attention_model_from_name(model_name):
     config_class, model_class = {
         'bert': (tr.BertConfig, tr.BertModel),
         'bigbird': (tr.BigBirdConfig, tr.BigBirdModel)
-    }.get(model_name, None)
-    assert model_class is not None, "Unknown model: {}".format(model_class)
+    }.get(model_name, (None,None))
+    assert None not in (config_class, model_class), "Unknown model: {}".format(model_name)
 
     def wrapper(*args, **kwargs):
         return AttentionModelCustom(*args, config_class=config_class, model_class=model_class, **kwargs)
