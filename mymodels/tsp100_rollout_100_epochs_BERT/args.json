@@ -5,7 +5,7 @@
  "epoch_size": 1280000,
  "val_size": 10000,
  "val_dataset": null,
- "model": "attention_bert",
+ "model": "bert",
  "embedding_dim": 128,
  "hidden_dim": 128,
  "n_encode_layers": 3,

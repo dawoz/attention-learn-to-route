@@ -51,10 +51,8 @@ def run(opts):
     # Initialize model
     model_class = {
         'attention': AttentionModel,
-        'pointer': PointerNetwork,
-        'attention_bert': attention_model_from_name('bert', opts.num_dist),
-        'attention_bigbird': attention_model_from_name('bigbird', opts.num_dist)
-    }.get(opts.model, None)
+        'pointer': PointerNetwork
+    }.get(opts.model, attention_model_from_name(opts.model))
     assert model_class is not None, "Unknown model: {}".format(model_class)
     model = model_class(
         opts.embedding_dim,

@@ -589,7 +589,7 @@ class AttentionModelCustom(AttentionModel):
 
         return cost, ll
 
-def attention_model_from_name(model_name, num_dist=0):
+def attention_model_from_name(model_name):
     import transformers as tr
     config_class, model_class = {
         'bert': (tr.BertConfig, tr.BertModel),
@@ -598,6 +598,6 @@ def attention_model_from_name(model_name, num_dist=0):
     assert model_class is not None, "Unknown model: {}".format(model_class)
 
     def wrapper(*args, **kwargs):
-        return AttentionModelCustom(*args, config_class=config_class, model_class=model_class, num_dist=num_dist, **kwargs)
+        return AttentionModelCustom(*args, config_class=config_class, model_class=model_class, **kwargs)
     return wrapper
 
