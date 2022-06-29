@@ -137,7 +137,6 @@ class StateTSP(NamedTuple):
 
 class StateTSPDist(NamedTuple):
     # Fixed input
-    loc: torch.Tensor
     dist: torch.Tensor
 
     # If this state contains multiple copies (i.e. beam search) for the same instance, then for memory efficiency
@@ -157,7 +156,7 @@ class StateTSPDist(NamedTuple):
         if self.visited_.dtype == torch.uint8:
             return self.visited_
         else:
-            return mask_long2bool(self.visited_, n=self.loc.size(-2))
+            return mask_long2bool(self.visited_, n=self.dist.size(-2))
 
     def __getitem__(self, key):
         assert torch.is_tensor(key) or isinstance(key, slice)  # If tensor, idx all tensors by this tensor:
@@ -171,28 +170,27 @@ class StateTSPDist(NamedTuple):
         )
 
     @staticmethod
-    def initialize(loc, visited_dtype=torch.uint8):
+    def initialize(dist, visited_dtype=torch.uint8):
 
-        batch_size, n_loc, _ = loc.size()
-        prev_a = torch.zeros(batch_size, 1, dtype=torch.long, device=loc.device)
+        batch_size, n_loc, _ = dist.size()
+        prev_a = torch.zeros(batch_size, 1, dtype=torch.long, device=dist.device)
         return StateTSPDist(
-            loc=loc,
-            dist=(loc[:, :, None, :] - loc[:, None, :, :]).norm(p=2, dim=-1),
-            ids=torch.arange(batch_size, dtype=torch.int64, device=loc.device)[:, None],  # Add steps dimension
+            dist=dist,
+            ids=torch.arange(batch_size, dtype=torch.int64, device=dist.device)[:, None],  # Add steps dimension
             first_a=prev_a,
             prev_a=prev_a,
             # Keep visited with depot so we can scatter efficiently (if there is an action for depot)
             visited_=(  # Visited as mask is easier to understand, as long more memory efficient
                 torch.zeros(
                     batch_size, 1, n_loc,
-                    dtype=torch.uint8, device=loc.device
+                    dtype=torch.uint8, device=dist.device
                 )
                 if visited_dtype == torch.uint8
-                else torch.zeros(batch_size, 1, (n_loc + 63) // 64, dtype=torch.int64, device=loc.device)  # Ceil
+                else torch.zeros(batch_size, 1, (n_loc + 63) // 64, dtype=torch.int64, device=dist.device)  # Ceil
             ),
-            lengths=torch.zeros(batch_size, 1, device=loc.device),
+            lengths=torch.zeros(batch_size, 1, device=dist.device),
             cur_coord=None,
-            i=torch.zeros(1, dtype=torch.int64, device=loc.device)  # Vector with length num_steps
+            i=torch.zeros(1, dtype=torch.int64, device=dist.device)  # Vector with length num_steps
         )
 
     def get_final_cost(self):
@@ -231,35 +229,13 @@ class StateTSPDist(NamedTuple):
 
     def all_finished(self):
         # Exactly n steps
-        return self.i.item() >= self.loc.size(-2)
+        return self.i.item() >= self.dist.size(-2)
 
     def get_current_node(self):
         return self.prev_a
 
     def get_mask(self):
         return self.visited > 0  # Hacky way to return bool or uint8 depending on pytorch version
-
-    def get_nn(self, k=None):
-        # Insert step dimension
-        # Nodes already visited get inf so they do not make it
-        if k is None:
-            k = self.loc.size(-2) - self.i.item()  # Number of remaining
-        return (self.dist[self.ids, :, :] + self.visited.float()[:, :, None, :] * 1e6).topk(k, dim=-1, largest=False)[1]
-
-    def get_nn_current(self, k=None):
-        assert False, "Currently not implemented, look into which neighbours to use in step 0?"
-        # Note: if this is called in step 0, it will have k nearest neighbours to node 0, which may not be desired
-        # so it is probably better to use k = None in the first iteration
-        if k is None:
-            k = self.loc.size(-2)
-        k = min(k, self.loc.size(-2) - self.i.item())  # Number of remaining
-        return (
-            self.dist[
-                self.ids,
-                self.prev_a
-            ] +
-            self.visited.float() * 1e6
-        ).topk(k, dim=-1, largest=False)[1]
 
     def construct_solutions(self, actions):
         return actions

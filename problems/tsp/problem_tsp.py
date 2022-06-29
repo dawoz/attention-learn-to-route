@@ -174,10 +174,12 @@ class TSPDist(TSP):
 class TSPDistDataset(Dataset):
     def __init__(self, filename=None, size=50, num_samples=1000000, offset=0, distribution=None):
         super(TSPDistDataset, self).__init__()
-        raise NotImplementedError
 
-        self.data_set = []
+        self.graph_size = size
+        self.size = num_samples
+
         if filename is not None:
+            raise NotImplementedError
             assert os.path.splitext(filename)[1] == '.pkl'
 
             with open(filename, 'rb') as f:
@@ -185,15 +187,12 @@ class TSPDistDataset(Dataset):
                 self.data = [torch.FloatTensor(row) for row in (data[offset:offset+num_samples])]
         else:
             # Sample distances in [0, 1]
-            self.data = []
-            for i in range(num_samples):
-                r = torch.FloatTensor(size, size).uniform_(0, 1).triu(1)
-                self.data.append((r + r.t()))
-
-        self.size = len(self.data)
+            self.seeds = torch.zeros((num_samples,), dtype=torch.int64)
 
     def __len__(self):
         return self.size
 
     def __getitem__(self, idx):
-        return self.data[idx]
+        self.seeds[idx] = torch.initial_seed()
+        r = torch.FloatTensor(self.graph_size, self.graph_size).uniform_(0, 1).triu(1)
+        return r + r.t()
