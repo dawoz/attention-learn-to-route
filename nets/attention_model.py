@@ -105,7 +105,7 @@ class AttentionModel(nn.Module):
         self.num_dist = num_dist
         self.sort_dist = sort_dist
         self.no_coord = no_coord
-        self.node_dim = (0 if no_coord else 2) + num_dist
+        self.node_dim = (0 if no_coord or problem.NAME == 'tsp_dist' else 2) + num_dist
         self.init_embed = nn.Linear(self.node_dim, embedding_dim)
 
         self.embedder = GraphAttentionEncoder(
@@ -136,18 +136,20 @@ class AttentionModel(nn.Module):
         :return:
         """
 
+        idx = 0 if self.no_coord else 2
         # add distance features
         if self.num_dist > 0:
-            idx = 0 if self.no_coord else 2
             if self.sort_dist:
-                input = torch.cat((input[:, :, :idx], (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1).sort(-1)[0]),dim=-1)
+                dist = (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1).sort(-1)[0]
             else:
-                input = torch.cat((input[:, :, :idx], (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1)),dim=-1)
+                dist = (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1)
+        else:
+            dist = torch.tensor([])
 
         if self.checkpoint_encoder and self.training:  # Only checkpoint if we need gradients
-            embeddings, _ = checkpoint(self.embedder, self._init_embed(input))
+            embeddings, _ = checkpoint(self.embedder, self._init_embed(torch.cat((input[:,:,:idx], dist),dim=-1)))
         else:
-            embeddings, _ = self.embedder(self._init_embed(input))
+            embeddings, _ = self.embedder(self._init_embed(torch.cat((input[:,:,:idx],dist), dim=-1)))
 
         _log_p, pi = self._inner(input, embeddings)
 
@@ -237,6 +239,7 @@ class AttentionModel(nn.Module):
         return self.init_embed(input)
 
     def _inner(self, input, embeddings):
+        assert self.problem.NAME != 'tsp' or input.shape[-1] == 2
 
         outputs = []
         sequences = []
@@ -567,7 +570,7 @@ class AttentionModelCustom(AttentionModel):
         self.num_dist = num_dist
         self.sort_dist = sort_dist
         self.no_coord = no_coord
-        self.node_dim = (0 if no_coord else 2) + num_dist
+        self.node_dim = (0 if no_coord or problem.NAME == 'tsp_dist' else 2) + num_dist
         self.init_embed = nn.Linear(self.node_dim, embedding_dim)
         self.embedder = GraphAttentionEncoderCustom(
             n_heads=n_heads,
