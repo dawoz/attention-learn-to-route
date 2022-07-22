@@ -1,19 +1,20 @@
 from tensorboard.backend.event_processing import event_accumulator
 from pprint import pprint
+from sys import argv
+import matplotlib.pyplot as plt
 
-ea = event_accumulator.EventAccumulator('logs/tsp_100/run_20220720T144358/events.out.tfevents.1658321038.LAPTOP-DAVIDE',
-    size_guidance={ # see below regarding this argument
-    event_accumulator.COMPRESSED_HISTOGRAMS: 500,
-          event_accumulator.IMAGES: 4,
-      event_accumulator.AUDIO: 4,
-      event_accumulator.SCALARS: 0,
-   event_accumulator.HISTOGRAMS: 1,
-     })
+if __name__ == '__main__':
+    if len(argv) != 2:
+        print('Usage: plot.py <log_file>')
+        exit(1)
 
-ea.Reload() # loads events from file
+    ea = event_accumulator.EventAccumulator(argv[1])
 
-pprint(ea.Tags()['scalars'])
+    ea.Reload()  # loads events from file
 
-serie = ea.Scalars('avg_cost')
-for s in serie:
-    pprint(s.value)
+    for serie_name in ea.Tags()['scalars']:
+        serie = [e.value for e in ea.Scalars(serie_name)]
+        
+        plt.plot(serie, label=serie_name)
+        plt.legend()
+        plt.show()
