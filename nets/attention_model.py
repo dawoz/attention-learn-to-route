@@ -144,7 +144,7 @@ class AttentionModel(nn.Module):
             else:
                 dist = (input[:,:,None,:] - input[:,None,:,:]).norm(p=2,dim=-1)
         else:
-            dist = torch.tensor([])
+            dist = torch.tensor([]).cuda()
 
         if self.checkpoint_encoder and self.training:  # Only checkpoint if we need gradients
             embeddings, _ = checkpoint(self.embedder, self._init_embed(torch.cat((input[:,:,:idx], dist),dim=-1)))
